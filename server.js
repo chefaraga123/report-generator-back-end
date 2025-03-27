@@ -1,13 +1,14 @@
 import express from "express";
 import cors from "cors";
 import axios from 'axios'; // Ensure axios is imported
+import { GraphQLClient, gql } from 'graphql-request';
 import { EventSource } from 'eventsource'; // Use named import for EventSource
 import { OpenAI } from "openai";
 import dotenv from 'dotenv';
 dotenv.config(); // Load environment variables from .env file
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5004;
 const apiEndpoint = process.env.API_ENDPOINT || "http://localhost:5000"
 const graphQLEndpoint = "https://live.api.footium.club/api/graphql"
 const matchEndpoint = "https://live.api.footium.club/api/sse"
@@ -15,6 +16,41 @@ const matchEndpoint = "https://live.api.footium.club/api/sse"
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
   });
+
+  // Initialize GraphQL client
+const graphqlClient = new GraphQLClient(`${graphQLEndpoint}`);
+
+
+
+const getPlayerData = async (playerId) => {
+  const playerQuery = gql`
+  query {
+    players(where: {id: {equals: "${playerId}"}}) {
+      id
+      fullName
+      club {
+        id
+      }
+      imageUrls {
+        player
+        card
+        thumb
+      }
+    }
+  }
+  `; // Use dynamic playerId in the query
+
+  try {
+      const data = await graphqlClient.request(playerQuery); // Use dynamic query
+      return data;
+  } catch (error) {
+      console.error('Error querying GraphQL API for player:', error);
+      return null;
+  }
+};
+
+
+
 
 // Middleware
 app.use(express.json());
@@ -43,7 +79,8 @@ app.get('/api/sse', async (req, res) => {
     let awayTeamId = 0;
     let goals = [];
     let cards = [];
-
+    let playerIdNameMap = {};
+    
     // Set the response headers for SSE
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -55,6 +92,26 @@ app.get('/api/sse', async (req, res) => {
         if (!data) {  // Check if the received data is falsey 
             return; // Exit the function if the data is an empty array
         }    
+
+        //console.log("homeTeam", data.state.homeTeam.lineupData.playerLineups)
+
+        let playerIds = [];
+        for (let player of data.state.homeTeam.lineupData.playerLineups){
+            playerIds.push(player.playerId)
+        }
+        
+        for (let player of data.state.awayTeam.lineupData.playerLineups){
+            playerIds.push(player.playerId)
+        }
+
+        for (let playerId of playerIds){
+            const playerData = await getPlayerData(playerId);
+            playerIdNameMap[playerId] = playerData.players[0].fullName;
+        }
+
+        console.log("FIRST playerIdNameMap", playerIdNameMap)
+
+        //console.log("awayTeam", data.state.awayTeam.lineupData.playerLineups)
 
         homeTeamWins = data.state.homeTeam.stats.wins
         awayTeamWins = data.state.awayTeam.stats.wins
@@ -74,7 +131,7 @@ app.get('/api/sse', async (req, res) => {
               cards.push(
                 {
                   "team": event.clubId,
-                  "card_receiver": event.playerId,
+                  "card_receiver": playerIdNameMap[event.playerId],
                   "card_time": event.timestamp
                 }
               );
@@ -82,7 +139,7 @@ app.get('/api/sse', async (req, res) => {
               goals.push(
                 {
                   "team": event.clubId,
-                  "goal_scorer": event.scorerPlayerId,
+                  "goal_scorer": playerIdNameMap[event.scorerPlayerId],
                   "goal_time": event.timestamp
                 }
               );
@@ -104,25 +161,33 @@ app.get('/api/sse', async (req, res) => {
 
     console.log("closing partial")
 
-    const url_match_frames = `${matchEndpoint}/match_frames/${fixtureId}`;
-    const eventSourceFrames = new EventSource(url_match_frames);
 
-    let digest = ''
-    eventSourceFrames.onmessage = async (event) => {
-        const data = JSON.parse(event.data); // Parse the incoming JSON data
-        // Check if the received data is an empty array
+    // Match Frames
 
-        if (!data) {  // Check if the received data is falsey 
-            return; // Exit the function if the data is an empty array
-        }   
+  const url_match_frames = `${matchEndpoint}/match_frames/${fixtureId}`;
+  const eventSourceFrames = new EventSource(url_match_frames);
 
-        const sequentialEvents = data.map(event => {
-          return `
-              Type: ${event.eventTypeAsString}, 
-              Team: ${event.teamInPossession}, 
-              Player: ${event.playerInPossession}`;
-        }).join('\n'); // Join with newlines for better readability
+  let digest = ''
+  eventSourceFrames.onmessage = async (event) => {
+      const data = JSON.parse(event.data); // Parse the incoming JSON data
+      // Check if the received data is an empty array
 
+      if (!data) {  // Check if the received data is falsey 
+          return; // Exit the function if the data is an empty array
+      }   
+      console.log("SECOND playerIdNameMap", playerIdNameMap)
+
+      const sequentialEvents = data.map(event => {
+       //console.log("player", typeof event.playerInPossession, playerIdNameMap, playerIdNameMap[event.playerInPossession])
+        return `
+            Type: ${event.eventTypeAsString}, 
+            Team: ${event.teamInPossession}, 
+            Player: ${event.playerInPossession}`;
+      }).join('\n'); // Join with newlines for better readability
+
+        
+      if (sequentialEvents) {
+        console.log("sequentialEvents", sequentialEvents)
         const message = `   
                     digest this passage of play, abstracted from a football match into a coherent narrative:
                     ${sequentialEvents}. 
@@ -133,32 +198,30 @@ app.get('/api/sse', async (req, res) => {
               messages: [
                   { role: "system", content: message
                   }
-              ],
+               ],
           });
-
           console.log("Digest \n",completion.choices[0].message.content)
           digest = completion.choices[0].message.content
 
-        } catch (error) {
-            console.error('Error querying OpenAI API:', error);
-            res.status(500).json({ error: 'Error querying OpenAI API', details: error.message });
+         } catch (error) {
+             console.error('Error querying OpenAI API:', error);
+             res.status(500).json({ error: 'Error querying OpenAI API', details: error.message });
         }
         
 
 
         console.log('closing')
         eventSourceFrames.close(); // Close the EventSource connection
-    
-        try {
-            res.json({ digest: digest }); // Send the digest as JSON response
-        } catch (error) {
-            console.error('Error sending response:', error);
-            res.status(500).json({ error: 'Internal Server Error' });
+      
+          try {
+              res.json({ digest: digest }); // Send the digest as JSON response, implicitly ends the connection 
+          } catch (error) {
+              console.error('Error sending response:', error);
+              res.status(500).json({ error: 'Internal Server Error' });
+          }
         }
-    
-        if (!responseSent) { // Ensure we end the response only if not already sent
-            res.end();
-        }
+      
+        
     };
 
     eventSourceFrames.onerror = (error) => {
