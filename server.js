@@ -28,14 +28,6 @@ const getPlayerData = async (playerId) => {
     players(where: {id: {equals: "${playerId}"}}) {
       id
       fullName
-      club {
-        id
-      }
-      imageUrls {
-        player
-        card
-        thumb
-      }
     }
   }
   `; // Use dynamic playerId in the query
@@ -48,6 +40,28 @@ const getPlayerData = async (playerId) => {
       return null;
   }
 };
+
+const getClubData = async (teamId) => {
+
+  const dynamicQuery = gql`
+  query {
+    clubs(where: {id: {equals: ${teamId}}}) {
+      name
+    }
+  }
+  `; // Use dynamic ID in the query
+
+  try {
+      const data = await graphqlClient.request(dynamicQuery); // Use dynamic query
+      return data.clubs[0].name;
+  } catch (error) {
+      console.error('Error querying GraphQL API:', error);
+      return null;
+  }
+};
+
+
+
 
 
 
@@ -80,87 +94,83 @@ app.get('/api/sse', async (req, res) => {
     let goals = [];
     let cards = [];
     let playerIdNameMap = {};
+    let clubIdNameMap = {};
     
     // Set the response headers for SSE
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    eventSourcePartial.onmessage = async (event) => {
-        const data = JSON.parse(event.data); // Parse the incoming JSON data
+    // Create a Promise to handle the EventSource logic for partial data
+    const processPartialData = new Promise((resolve, reject) => {
+        eventSourcePartial.onmessage = async (event) => {
+            const data = JSON.parse(event.data);
 
-        if (!data) {  // Check if the received data is falsey 
-            return; // Exit the function if the data is an empty array
-        }    
-
-        //console.log("homeTeam", data.state.homeTeam.lineupData.playerLineups)
-
-        let playerIds = [];
-        for (let player of data.state.homeTeam.lineupData.playerLineups){
-            playerIds.push(player.playerId)
-        }
-        
-        for (let player of data.state.awayTeam.lineupData.playerLineups){
-            playerIds.push(player.playerId)
-        }
-
-        for (let playerId of playerIds){
-            const playerData = await getPlayerData(playerId);
-            playerIdNameMap[playerId] = playerData.players[0].fullName;
-        }
-
-        console.log("FIRST playerIdNameMap", playerIdNameMap)
-
-        //console.log("awayTeam", data.state.awayTeam.lineupData.playerLineups)
-
-        homeTeamWins = data.state.homeTeam.stats.wins
-        awayTeamWins = data.state.awayTeam.stats.wins
-        homeTeamId = data.state.homeTeam.clubId;
-        awayTeamId = data.state.awayTeam.clubId;
-
-    
-          for (const event of data.state.keyEvents) {
-            let playerId = '';
-            if (event.type == 2) {
-              playerId = event.playerId;
-            } else if (event.type == 0) {
-              playerId = event.scorerPlayerId;
+            if (!data) {
+                return;
             }
-      
-            if (event.type == 2) {
-              cards.push(
-                {
-                  "team": event.clubId,
-                  "card_receiver": playerIdNameMap[event.playerId],
-                  "card_time": event.timestamp
-                }
-              );
-            } else if (event.type == 0) {
-              goals.push(
-                {
-                  "team": event.clubId,
-                  "goal_scorer": playerIdNameMap[event.scorerPlayerId],
-                  "goal_time": event.timestamp
-                }
-              );
+
+            let playerIds = [];
+            for (let player of data.state.homeTeam.lineupData.playerLineups) {
+                playerIds.push(player.playerId);
             }
-          }  
-        
-        console.log(
-            homeTeamWins,
-            awayTeamWins,
-            homeTeamId,
-            awayTeamId,
-            goals,
-            cards
-        )
 
-        console.log('closing')
-        eventSourcePartial.close(); // Close the EventSource connection
-    }
+            for (let player of data.state.awayTeam.lineupData.playerLineups) {
+                playerIds.push(player.playerId);
+            }
 
-    console.log("closing partial")
+            for (let playerId of playerIds) {
+                const playerData = await getPlayerData(playerId);
+                playerIdNameMap[playerId] = playerData.players[0].fullName;
+            }
 
+            homeTeamWins = data.state.homeTeam.stats.wins;
+            awayTeamWins = data.state.awayTeam.stats.wins;
+            homeTeamId = data.state.homeTeam.clubId;
+            awayTeamId = data.state.awayTeam.clubId;
+
+            const homeTeamName = await getClubData(homeTeamId);
+            const awayTeamName = await getClubData(awayTeamId);
+            clubIdNameMap[homeTeamId] = homeTeamName;
+            clubIdNameMap[awayTeamId] = awayTeamName;
+
+            for (const event of data.state.keyEvents) {
+                let playerId = '';
+                if (event.type == 2) {
+                    playerId = event.playerId;
+                } else if (event.type == 0) {
+                    playerId = event.scorerPlayerId;
+                }
+
+                if (event.type == 2) {
+                    cards.push({
+                        "team": event.clubId,
+                        "card_receiver": playerIdNameMap[event.playerId],
+                        "card_time": event.timestamp
+                    });
+                } else if (event.type == 0) {
+                    goals.push({
+                        "team": event.clubId,
+                        "goal_scorer": playerIdNameMap[event.scorerPlayerId],
+                        "goal_time": event.timestamp
+                    });
+                }
+            }
+
+            console.log("FIRST playerIdNameMap", playerIdNameMap);
+            eventSourcePartial.close();
+            resolve(); // Resolve the Promise when done processing
+        };
+
+        eventSourcePartial.onerror = (error) => {
+            console.error('EventSource failed:', error);
+            eventSourcePartial.close();
+            reject(new Error('EventSource error'));
+        };
+    });
+
+    // Await the Promise before running the next part of your code
+    await processPartialData;
 
     // Match Frames
 
@@ -181,8 +191,8 @@ app.get('/api/sse', async (req, res) => {
        //console.log("player", typeof event.playerInPossession, playerIdNameMap, playerIdNameMap[event.playerInPossession])
         return `
             Type: ${event.eventTypeAsString}, 
-            Team: ${event.teamInPossession}, 
-            Player: ${event.playerInPossession}`;
+            Team: ${clubIdNameMap[event.teamInPossession]}, 
+            Player: ${playerIdNameMap[event.playerInPossession]}`;
       }).join('\n'); // Join with newlines for better readability
 
         
