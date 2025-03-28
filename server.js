@@ -23,6 +23,7 @@ const graphqlClient = new GraphQLClient(`${graphQLEndpoint}`);
 
 
 const getPlayerData = async (playerId) => {
+
   const playerQuery = gql`
   query {
     players(where: {id: {equals: "${playerId}"}}) {
@@ -59,11 +60,6 @@ const getClubData = async (teamId) => {
       return null;
   }
 };
-
-
-
-
-
 
 
 // Middleware
@@ -144,20 +140,19 @@ app.get('/api/sse', async (req, res) => {
 
                 if (event.type == 2) {
                     cards.push({
-                        "team": event.clubId,
+                        "team": clubIdNameMap[event.clubId],
                         "card_receiver": playerIdNameMap[event.playerId],
                         "card_time": event.timestamp
                     });
                 } else if (event.type == 0) {
                     goals.push({
-                        "team": event.clubId,
+                        "team": clubIdNameMap[event.clubId],
                         "goal_scorer": playerIdNameMap[event.scorerPlayerId],
                         "goal_time": event.timestamp
                     });
                 }
             }
 
-            console.log("FIRST playerIdNameMap", playerIdNameMap);
             eventSourcePartial.close();
             resolve(); // Resolve the Promise when done processing
         };
@@ -185,7 +180,6 @@ app.get('/api/sse', async (req, res) => {
       if (!data) {  // Check if the received data is falsey 
           return; // Exit the function if the data is an empty array
       }   
-      console.log("SECOND playerIdNameMap", playerIdNameMap)
 
       const sequentialEvents = data.map(event => {
        //console.log("player", typeof event.playerInPossession, playerIdNameMap, playerIdNameMap[event.playerInPossession])
@@ -199,8 +193,15 @@ app.get('/api/sse', async (req, res) => {
       if (sequentialEvents) {
         console.log("sequentialEvents", sequentialEvents)
         const message = `   
-                    digest this passage of play, abstracted from a football match into a coherent narrative:
-                    ${sequentialEvents}. 
+
+        You are a reporter for a football website or publication like "the Athletic".
+        You are given a passage of play, abstracted from a football match into a coherent narrative.
+        Your job is to digest this passage of play, and provide a concise summary of the events that occurred.
+        Note the goals - who scored, and when. ${goals.map(goal => `${goal.team} - ${goal.goal_scorer}`).join('\n')}
+        
+        Note the cards - who received them, and when. ${cards.map(card => `${card.team} - ${card.card_receiver}`).join('\n')}
+        
+        ${sequentialEvents}. 
                   ` 
         try {
           const completion = await openai.chat.completions.create({
@@ -210,7 +211,6 @@ app.get('/api/sse', async (req, res) => {
                   }
                ],
           });
-          console.log("Digest \n",completion.choices[0].message.content)
           digest = completion.choices[0].message.content
 
          } catch (error) {
@@ -218,13 +218,10 @@ app.get('/api/sse', async (req, res) => {
              res.status(500).json({ error: 'Error querying OpenAI API', details: error.message });
         }
         
-
-
-        console.log('closing')
         eventSourceFrames.close(); // Close the EventSource connection
       
           try {
-              res.json({ digest: digest }); // Send the digest as JSON response, implicitly ends the connection 
+              res.json({ digest: digest, goals: goals, cards: cards }); // Send the digest as JSON response, implicitly ends the connection 
           } catch (error) {
               console.error('Error sending response:', error);
               res.status(500).json({ error: 'Internal Server Error' });
