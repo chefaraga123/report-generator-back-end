@@ -72,7 +72,6 @@ app.get("/", (req, res) => {
 
 app.get('/api/sse', async (req, res) => {
     const { fixtureId } = req.query; // Get user input for ID from query parameters
-    console.log
     console.log("fixtureId:", fixtureId);
 
     if (!fixtureId) {
@@ -214,6 +213,7 @@ app.get('/api/sse', async (req, res) => {
             
             eventSourceFrames.close();
 
+            console.log(digest, goals, cards)
             try {
                 res.json({ digest: digest, goals: goals, cards: cards });
             } catch (error) {
