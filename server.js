@@ -128,7 +128,6 @@ app.get('/api/sse', async (req, res) => {
     let clubIdNameMap = {};
 
     // Set the response headers for SSE
-    res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
