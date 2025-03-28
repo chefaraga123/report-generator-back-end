@@ -24,9 +24,9 @@ const exampleMatchReport = `
 An early setback - somehow
 Mikel Arteta had called for a cauldron-like atmosphere inside Emirates Stadium and he got just that during the opening stages, and pushed along by the swarths of support, we dominated the early stages.
 
-Spurs headed into the game with one win in their last eight matches, and it showed in the fist 20 minutes. They completed just four passes in our half during that period, and indeed their keeper Antonin Kinsky had the most touches for his side, but we couldn’t turn that pressure into a goal.
+Spurs headed into the game with one win in their last eight matches, and it showed in the fist 20 minutes. They completed just four passes in our half during that period, and indeed their keeper Antonin Kinsky had the most touches for his side, but we couldn't turn that pressure into a goal.
 
-Trossard came closest when he saw a goalbound shot cannon off the back of a defender after a corner wasn’t cleared, and Kinsky twice had the ball nicked from by Kai Havertz but both times possession somehow stayed with Ange Postecoglu’s side.
+Trossard came closest when he saw a goalbound shot cannon off the back of a defender after a corner wasn't cleared, and Kinsky twice had the ball nicked from by Kai Havertz but both times possession somehow stayed with Ange Postecoglu's side.
 
 But after surviving the opening stages, Spurs suddenly built up a head of steam. A fine challenge from Gabriel prevented Son from converting a Djed Spence centre, and from the resulting corner David Raya made a good block to thwart Dejan Kulusevski.
 
@@ -38,9 +38,9 @@ The game became more of an even contest after that, but we kept probing and a st
 
 Declan Rice swung it towards the back post where Gabriel had powered his way towards, and he got a touch on the ball which deflected off Dominic Solanke and spun into the net to get us back level and raise the decibel level in north London once again.
 
-And it reached a crescendo four minutes later when we turned the game on its head by snatching the lead. A strong challenge by Thomas Partey won the ball on the halfway line and he found Martin Odegaard, who played a delightful pass into the galloping Trossard’s path. He took two touches to get it to the edge of the box, and drilled it low and hard past Kinsky to send the derby spinning in the opposite direction.
+And it reached a crescendo four minutes later when we turned the game on its head by snatching the lead. A strong challenge by Thomas Partey won the ball on the halfway line and he found Martin Odegaard, who played a delightful pass into the galloping Trossard's path. He took two touches to get it to the edge of the box, and drilled it low and hard past Kinsky to send the derby spinning in the opposite direction.
 
-With the stadium bouncing and the wind in our sails, we didn’t want half-time to come, but even though we were forced to head into the changing rooms, we came back out displaying the same vigour.
+With the stadium bouncing and the wind in our sails, we didn't want half-time to come, but even though we were forced to head into the changing rooms, we came back out displaying the same vigour.
 
 Getting over the line
 Havertz went close to sending another corner into the net when he nodded an Odegaard delivery just wide, and then the German headed straight at Kimsky when picked out in space by Partey.
@@ -177,12 +177,14 @@ app.get('/api/sse', async (req, res) => {
                     cards.push({
                         "team": clubIdNameMap[event.clubId],
                         "card_receiver": playerIdNameMap[event.playerId],
+                        "card_receiver_id": event.playerId,
                         "card_time": event.timestamp
                     });
                 } else if (event.type == 0) {
                     goals.push({
                         "team": clubIdNameMap[event.clubId],
                         "goal_scorer": playerIdNameMap[event.scorerPlayerId],
+                        "goal_scorer_id": event.scorerPlayerId,
                         "goal_time": event.timestamp
                     });
                 }
@@ -221,27 +223,36 @@ app.get('/api/sse', async (req, res) => {
         }).join('\n');
 
         if (sequentialEvents) {
+            // Calculate total goals for each team
+            const homeTeamGoals = goals.filter(goal => goal.team === clubIdNameMap[homeTeamId]).length;
+            const awayTeamGoals = goals.filter(goal => goal.team === clubIdNameMap[awayTeamId]).length;
+
+            // Include the overall score in the message
             const message = `   
 
-        You are a reporter for a football website or publication like "the Athletic". This is an example of a match report:
-        ${exampleMatchReport}
-        You are given a passage of play, abstracted from a football match into a coherent narrative.
-        Your job is to digest this passage of play, and provide a concise summary of the events that occurred.
-        Note the goals - who scored, and when. ${goals.map(goal => `${goal.team} - ${goal.goal_scorer}`).join('\n')}
-        
-        Note the cards - who received them, and when. ${cards.map(card => `${card.team} - ${card.card_receiver}`).join('\n')}
-        
-        ${sequentialEvents}. 
+You are a reporter for a football website or publication like "the Athletic". This is an example of a match report:
+${exampleMatchReport}
+
+Note the goals - who scored, and when. ${goals.map(goal => `${goal.team} - ${goal.goal_scorer}`).join('\n')}
+Overall Score: ${clubIdNameMap[homeTeamId]} ${homeTeamGoals} - ${awayTeamGoals} ${clubIdNameMap[awayTeamId]}
+
+You are given a passage of play, abstracted from a football match into a coherent narrative.
+Your job is to digest this passage of play, and provide a concise summary of the events that occurred.
+
+Note the cards - who received them, and when. ${cards.map(card => `${card.team} - ${card.card_receiver}`).join('\n')}
+
+${sequentialEvents}. 
                   ` 
-        try {
-          const completion = await openai.chat.completions.create({
-              model: "gpt-4o-mini",
-              messages: [
-                  { role: "system", content: message
-                  }
-               ],
-          });
-          digest = completion.choices[0].message.content
+            try {
+              const completion = await openai.chat.completions.create({
+                  model: "gpt-4o-mini",
+                  messages: [
+                      { role: "system", content: message
+                      }
+                   ],
+                   max_tokens: 1000,
+              });
+              digest = completion.choices[0].message.content
 
             } catch (error) {
                 console.error('Error querying OpenAI API:', error);
@@ -249,10 +260,18 @@ app.get('/api/sse', async (req, res) => {
             }
             
             eventSourceFrames.close();
-
-            console.log(digest, goals, cards)
+            console.log("homeTeamGoals",homeTeamGoals, "awayTeamGoals", awayTeamGoals)
+            console.log(digest, homeTeamGoals, awayTeamGoals, goals, cards)
             try {
-                res.json({ digest: digest, goals: goals, cards: cards });
+                res.json({ 
+                    digest: digest, 
+                    goals: goals, 
+                    cards: cards, 
+                    homeTeamGoals: homeTeamGoals, 
+                    homeTeamName: clubIdNameMap[homeTeamId],
+                    awayTeamGoals: awayTeamGoals, 
+                    awayTeamName: clubIdNameMap[awayTeamId]
+                });
             } catch (error) {
                 console.error('Error sending response:', error);
             }
