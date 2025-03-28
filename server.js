@@ -21,7 +21,6 @@ const openai = new OpenAI({
 const graphqlClient = new GraphQLClient(`${graphQLEndpoint}`);
 
 
-
 const getPlayerData = async (playerId) => {
 
   const playerQuery = gql`
@@ -73,6 +72,7 @@ app.get("/", (req, res) => {
 
 app.get('/api/sse', async (req, res) => {
     const { fixtureId } = req.query; // Get user input for ID from query parameters
+    console.log
     console.log("fixtureId:", fixtureId);
 
     if (!fixtureId) {
@@ -82,7 +82,7 @@ app.get('/api/sse', async (req, res) => {
     const url_partial_match = `${matchEndpoint}/partial_match/${fixtureId}`;
     const eventSourcePartial = new EventSource(url_partial_match);
 
-    // Scope variables
+    // Initialize variables
     let homeTeamWins = 0;
     let awayTeamWins = 0;
     let homeTeamId = 0;
@@ -91,7 +91,7 @@ app.get('/api/sse', async (req, res) => {
     let cards = [];
     let playerIdNameMap = {};
     let clubIdNameMap = {};
-    
+
     // Set the response headers for SSE
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -154,7 +154,7 @@ app.get('/api/sse', async (req, res) => {
             }
 
             eventSourcePartial.close();
-            resolve(); // Resolve the Promise when done processing
+            resolve();
         };
 
         eventSourcePartial.onerror = (error) => {
@@ -167,32 +167,26 @@ app.get('/api/sse', async (req, res) => {
     // Await the Promise before running the next part of your code
     await processPartialData;
 
-    // Match Frames
+    const url_match_frames = `${matchEndpoint}/match_frames/${fixtureId}`;
+    const eventSourceFrames = new EventSource(url_match_frames);
 
-  const url_match_frames = `${matchEndpoint}/match_frames/${fixtureId}`;
-  const eventSourceFrames = new EventSource(url_match_frames);
+    let digest = ''
+    eventSourceFrames.onmessage = async (event) => {
+        const data = JSON.parse(event.data);
 
-  let digest = ''
-  eventSourceFrames.onmessage = async (event) => {
-      const data = JSON.parse(event.data); // Parse the incoming JSON data
-      // Check if the received data is an empty array
+        if (!data) {
+            return;
+        }
 
-      if (!data) {  // Check if the received data is falsey 
-          return; // Exit the function if the data is an empty array
-      }   
+        const sequentialEvents = data.map(event => {
+            return `
+                Type: ${event.eventTypeAsString}, 
+                Team: ${clubIdNameMap[event.teamInPossession]}, 
+                Player: ${playerIdNameMap[event.playerInPossession]}`;
+        }).join('\n');
 
-      const sequentialEvents = data.map(event => {
-       //console.log("player", typeof event.playerInPossession, playerIdNameMap, playerIdNameMap[event.playerInPossession])
-        return `
-            Type: ${event.eventTypeAsString}, 
-            Team: ${clubIdNameMap[event.teamInPossession]}, 
-            Player: ${playerIdNameMap[event.playerInPossession]}`;
-      }).join('\n'); // Join with newlines for better readability
-
-        
-      if (sequentialEvents) {
-
-        const message = `   
+        if (sequentialEvents) {
+            const message = `   
 
         You are a reporter for a football website or publication like "the Athletic".
         You are given a passage of play, abstracted from a football match into a coherent narrative.
@@ -213,22 +207,19 @@ app.get('/api/sse', async (req, res) => {
           });
           digest = completion.choices[0].message.content
 
-         } catch (error) {
-             console.error('Error querying OpenAI API:', error);
-             res.status(500).json({ error: 'Error querying OpenAI API', details: error.message });
+            } catch (error) {
+                console.error('Error querying OpenAI API:', error);
+                res.status(500).json({ error: 'Error querying OpenAI API', details: error.message });
+            }
+            
+            eventSourceFrames.close();
+
+            try {
+                res.json({ digest: digest, goals: goals, cards: cards });
+            } catch (error) {
+                console.error('Error sending response:', error);
+            }
         }
-        
-        eventSourceFrames.close(); // Close the EventSource connection
-      
-          try {
-              res.json({ digest: digest, goals: goals, cards: cards }); // Send the digest as JSON response, implicitly ends the connection 
-          } catch (error) {
-              console.error('Error sending response:', error);
-              res.status(500).json({ error: 'Internal Server Error' });
-          }
-        }
-      
-        
     };
 
     eventSourceFrames.onerror = (error) => {
