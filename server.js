@@ -208,6 +208,8 @@ app.get('/api/sse', async (req, res) => {
     const eventSourceFrames = new EventSource(url_match_frames);
 
     let digest = ''
+    let imageUrl = ''
+
     eventSourceFrames.onmessage = async (event) => {
         const data = JSON.parse(event.data);
 
@@ -241,6 +243,8 @@ Your job is to digest this passage of play, and provide a concise summary of the
 
 Note the cards - who received them, and when. ${cards.map(card => `${card.team} - ${card.card_receiver}`).join('\n')}
 
+Don't make any reference to the particular timestamp of the events, just describe the events in order.
+
 ${sequentialEvents}. 
                   ` 
             try {
@@ -254,6 +258,18 @@ ${sequentialEvents}.
               });
               digest = completion.choices[0].message.content
 
+              const imageResponse = await openai.images.generate({
+                model: "dall-e-3",
+                prompt: `A scene from this match message: ${digest}`,
+                n: 1,
+                size: "1024x1024",
+                quality: "standard",
+               });
+            
+            imageUrl = imageResponse.data[0].url;
+        
+              
+
             } catch (error) {
                 console.error('Error querying OpenAI API:', error);
                 res.status(500).json({ error: 'Error querying OpenAI API', details: error.message });
@@ -261,10 +277,11 @@ ${sequentialEvents}.
             
             eventSourceFrames.close();
             console.log("homeTeamGoals",homeTeamGoals, "awayTeamGoals", awayTeamGoals)
-            console.log(digest, homeTeamGoals, awayTeamGoals, goals, cards)
+            console.log(digest, imageUrl, homeTeamGoals, awayTeamGoals, goals, cards)
             try {
                 res.json({ 
                     digest: digest, 
+                    imageUrl: imageUrl,
                     goals: goals, 
                     cards: cards, 
                     homeTeamGoals: homeTeamGoals, 
