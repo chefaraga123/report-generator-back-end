@@ -20,6 +20,42 @@ const openai = new OpenAI({
   // Initialize GraphQL client
 const graphqlClient = new GraphQLClient(`${graphQLEndpoint}`);
 
+const exampleMatchReport = `
+An early setback - somehow
+Mikel Arteta had called for a cauldron-like atmosphere inside Emirates Stadium and he got just that during the opening stages, and pushed along by the swarths of support, we dominated the early stages.
+
+Spurs headed into the game with one win in their last eight matches, and it showed in the fist 20 minutes. They completed just four passes in our half during that period, and indeed their keeper Antonin Kinsky had the most touches for his side, but we couldn’t turn that pressure into a goal.
+
+Trossard came closest when he saw a goalbound shot cannon off the back of a defender after a corner wasn’t cleared, and Kinsky twice had the ball nicked from by Kai Havertz but both times possession somehow stayed with Ange Postecoglu’s side.
+
+But after surviving the opening stages, Spurs suddenly built up a head of steam. A fine challenge from Gabriel prevented Son from converting a Djed Spence centre, and from the resulting corner David Raya made a good block to thwart Dejan Kulusevski.
+
+However another set-piece on 24 minutes would be our undoing. A short corner was sent into a congested area by Pedro Porro, and after it was cleared to the edge of the area, Son was lurking and sent a shot back through the bodies, and aided by a deflection found the net for the eighth time in the derby.
+
+
+Swift turnaround
+The game became more of an even contest after that, but we kept probing and a stroke of luck saw us get level. On 38 minutes Trossard and Porro challenged for the ball on the byline and despite the ball flicking off the Belgian, we were awarded the corner - and we made the most of it.
+
+Declan Rice swung it towards the back post where Gabriel had powered his way towards, and he got a touch on the ball which deflected off Dominic Solanke and spun into the net to get us back level and raise the decibel level in north London once again.
+
+And it reached a crescendo four minutes later when we turned the game on its head by snatching the lead. A strong challenge by Thomas Partey won the ball on the halfway line and he found Martin Odegaard, who played a delightful pass into the galloping Trossard’s path. He took two touches to get it to the edge of the box, and drilled it low and hard past Kinsky to send the derby spinning in the opposite direction.
+
+With the stadium bouncing and the wind in our sails, we didn’t want half-time to come, but even though we were forced to head into the changing rooms, we came back out displaying the same vigour.
+
+Getting over the line
+Havertz went close to sending another corner into the net when he nodded an Odegaard delivery just wide, and then the German headed straight at Kimsky when picked out in space by Partey.
+
+One player enjoying his first taste of the derby was Lewis Myles-Skelly. Despite being the second-youngest Gunner to start in a Premier League north London derby, he looked assured in defence, regularly scrapping away to win possession for his side and then confidently striding forward with the ball to start attacks.
+
+And they kept coming for the hosts but we would be denied by Kimsky twice in quick succession on 72 minutes. Rice fizzed one at him which struck him in the chest, before Odegaard swiftly followed up with a low effort which was saved by the Czech keeper.
+
+Our skipper again went close with six minutes to go when Kieran Tierney threaded a pass to him inside the box but he screwed it wide of the mark, but with the lead intact it was just about grinding it out.
+
+Like most of the second 45, Spurs offered little threat but in the final minute of stoppage time, Porro wrapped a shot from a tight angle off the outside the post, but we saw out the final few seconds to stretch our unbeaten league run to 11, record our fifth Premier League double over Spurs and clinch the derby day bragging rights - again.
+
+`
+
+
 
 const getPlayerData = async (playerId) => {
 
@@ -187,7 +223,8 @@ app.get('/api/sse', async (req, res) => {
         if (sequentialEvents) {
             const message = `   
 
-        You are a reporter for a football website or publication like "the Athletic".
+        You are a reporter for a football website or publication like "the Athletic". This is an example of a match report:
+        ${exampleMatchReport}
         You are given a passage of play, abstracted from a football match into a coherent narrative.
         Your job is to digest this passage of play, and provide a concise summary of the events that occurred.
         Note the goals - who scored, and when. ${goals.map(goal => `${goal.team} - ${goal.goal_scorer}`).join('\n')}
