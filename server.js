@@ -191,7 +191,7 @@ app.get('/api/sse', async (req, res) => {
 
         
       if (sequentialEvents) {
-        console.log("sequentialEvents", sequentialEvents)
+
         const message = `   
 
         You are a reporter for a football website or publication like "the Athletic".
