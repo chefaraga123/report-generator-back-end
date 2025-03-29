@@ -158,6 +158,7 @@ app.get('/api/sse', async (req, res) => {
             awayTeamWins = data.state.awayTeam.stats.wins;
             homeTeamId = data.state.homeTeam.clubId;
             awayTeamId = data.state.awayTeam.clubId;
+            console.log("homeTeamId", homeTeamId, "awayTeamId", awayTeamId)
 
             const homeTeamName = await getClubData(homeTeamId);
             const awayTeamName = await getClubData(awayTeamId);
@@ -255,11 +256,12 @@ ${sequentialEvents}.
                    ],
                    max_tokens: 1000,
               });
+              console.log("completion", completion)
               digest = completion.choices[0].message.content
 
               const imageResponse = await openai.images.generate({
                 model: "dall-e-3",
-                prompt: `A scene from this match message: ${digest}`,
+                prompt: `A scene from this match: ${digest}`,
                 n: 1,
                 size: "1024x1024",
                 quality: "standard",
@@ -271,13 +273,15 @@ ${sequentialEvents}.
 
             } catch (error) {
                 console.error('Error querying OpenAI API:', error);
-                res.status(500).json({ error: 'Error querying OpenAI API', details: error.message });
+                console.log("res.headersSent 1", res.headersSent)
+                console.log("res.headersSent 2", res.headersSent)
             }
             
             eventSourceFrames.close();
             console.log("homeTeamGoals",homeTeamGoals, "awayTeamGoals", awayTeamGoals)
             console.log(digest, imageUrl, homeTeamGoals, awayTeamGoals, goals, cards)
             try {
+                console.log("res.headersSent 3", res.headersSent)
                 res.json({ 
                     digest: digest, 
                     imageUrl: imageUrl,
