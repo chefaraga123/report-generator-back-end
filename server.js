@@ -140,7 +140,7 @@ app.get('/api/sse', async (req, res) => {
     // Create a Promise to handle the EventSource logic for partial data
     const processPartialData = new Promise((resolve, reject) => {
         eventSourcePartial.onmessage = async (event) => {
-            console.log("Received partial data");
+            console.log("Received partial data:", event.data);
             const data = JSON.parse(event.data);
 
             if (!data) {
@@ -218,7 +218,7 @@ app.get('/api/sse', async (req, res) => {
     let imageUrl = ''
 
     eventSourceFrames.onmessage = async (event) => {
-        console.log("Recieved match frames data")
+        console.log("Recieved match frames data", event.data)
         const data = JSON.parse(event.data);
 
         if (!data) {
