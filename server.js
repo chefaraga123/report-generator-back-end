@@ -113,12 +113,14 @@ const getClubData = async (teamId) => {
 app.get('/api/sse', async (req, res) => {
     const { fixtureId } = req.query; // Get user input for ID from query parameters
     console.log("fixtureId:", fixtureId);
+    console.log("Received request for fixtureId:", fixtureId);
 
     if (!fixtureId) {
         return res.status(400).json({ error: 'Match ID is required.' });
     }
 
     const url_partial_match = `${matchEndpoint}/partial_match/${fixtureId}`;
+    console.log("Connecting to EventSource", url_partial_match)
     const eventSourcePartial = new EventSource(url_partial_match);
 
     // Initialize variables
@@ -138,6 +140,7 @@ app.get('/api/sse', async (req, res) => {
     // Create a Promise to handle the EventSource logic for partial data
     const processPartialData = new Promise((resolve, reject) => {
         eventSourcePartial.onmessage = async (event) => {
+            console.log("Received partial data");
             const data = JSON.parse(event.data);
 
             if (!data) {
@@ -215,6 +218,7 @@ app.get('/api/sse', async (req, res) => {
     let imageUrl = ''
 
     eventSourceFrames.onmessage = async (event) => {
+        console.log("Recieved match frames data")
         const data = JSON.parse(event.data);
 
         if (!data) {
