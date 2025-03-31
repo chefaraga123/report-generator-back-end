@@ -99,8 +99,11 @@ const getClubData = async (teamId) => {
 
 // Middleware
 app.use(express.json());
-app.use(cors());
-
+app.use(cors({
+    origin: '*', // or '*' for all origins
+    methods: 'GET,POST',
+    allowedHeaders: 'Content-Type,Authorization'
+  }));
 // Sample Route
 app.get("/", (req, res) => {
     res.send("Express Server is Running!");
