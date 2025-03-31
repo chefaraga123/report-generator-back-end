@@ -149,6 +149,11 @@ app.get('/api/sse', async (req, res) => {
                 return;
             }
 
+            // Close the EventSource connection once received data
+            eventSourcePartial.close();
+            resolve();
+
+            
             let playerIds = [];
             for (let player of data.state.homeTeam.lineupData.playerLineups) {
                 playerIds.push(player.playerId);
@@ -198,9 +203,6 @@ app.get('/api/sse', async (req, res) => {
                     });
                 }
             }
-
-            eventSourcePartial.close();
-            resolve();
         };
 
         eventSourcePartial.onerror = (error) => {
@@ -226,7 +228,7 @@ app.get('/api/sse', async (req, res) => {
         if (!data) {
             return;
         }
-
+        
         const sequentialEvents = data.map(event => {
             return `
                 Type: ${event.eventTypeAsString}, 
@@ -258,6 +260,7 @@ Don't make any reference to the particular timestamp of the events, just describ
 ${sequentialEvents}. 
                   ` 
             try {
+                console.log("message", message)
               const completion = await openai.chat.completions.create({
                   model: "gpt-4o-mini",
                   messages: [
@@ -279,7 +282,8 @@ ${sequentialEvents}.
             
             imageUrl = imageResponse.data[0].url;
         
-              
+            eventSourceFrames.close();
+
 
             } catch (error) {
                 console.error('Error querying OpenAI API:', error);
@@ -287,7 +291,6 @@ ${sequentialEvents}.
                 console.log("res.headersSent 2", res.headersSent)
             }
             
-            eventSourceFrames.close();
             console.log("homeTeamGoals",homeTeamGoals, "awayTeamGoals", awayTeamGoals)
             console.log(digest, imageUrl, homeTeamGoals, awayTeamGoals, goals, cards)
             try {
