@@ -303,16 +303,12 @@ ${sequentialEvents}.
                 });
                 console.log("res.headersSent 3", res.headersSent)
             } catch (error) {
+                res.end(); // End the response to the client
                 console.error('Error sending response:', error);
             }
         }
     };
 
-    eventSourceFrames.onerror = (error) => {
-        console.error('EventSource failed:', error);
-        eventSourceFrames.close(); // Close the connection on error
-        res.end(); // End the response to the client
-    };
 
 })
 
