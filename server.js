@@ -13,6 +13,18 @@ const apiEndpoint = process.env.API_ENDPOINT || "http://localhost:5000"
 const graphQLEndpoint = "https://live.api.footium.club/api/graphql"
 const matchEndpoint = "https://live.api.footium.club/api/sse"
 
+// Middleware
+app.use(express.json());
+app.use(cors({
+    origin: '*', // or '*' for all origins
+    methods: 'GET,POST',
+    allowedHeaders: 'Content-Type,Authorization'
+  }));
+// Sample Route
+app.get("/", (req, res) => {
+    res.send("Express Server is Running!");
+});
+
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
   });
@@ -97,17 +109,6 @@ const getClubData = async (teamId) => {
 };
 
 
-// Middleware
-app.use(express.json());
-app.use(cors({
-    origin: '*', // or '*' for all origins
-    methods: 'GET,POST',
-    allowedHeaders: 'Content-Type,Authorization'
-  }));
-// Sample Route
-app.get("/", (req, res) => {
-    res.send("Express Server is Running!");
-});
 
 app.get('/api/sse', async (req, res) => {
     const { fixtureId } = req.query; // Get user input for ID from query parameters
