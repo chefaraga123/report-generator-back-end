@@ -136,11 +136,13 @@ app.get('/api/sse', async (req, res) => {
     // Set the response headers for SSE
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');  
 
     // Create a Promise to handle the EventSource logic for partial data
     const processPartialData = new Promise((resolve, reject) => {
         eventSourcePartial.onmessage = async (event) => {
-            console.log("Received partial data:", event.data);
+            console.log("Received partial data:", typeof event.data);
             const data = JSON.parse(event.data);
 
             if (!data) {
@@ -218,7 +220,7 @@ app.get('/api/sse', async (req, res) => {
     let imageUrl = ''
 
     eventSourceFrames.onmessage = async (event) => {
-        console.log("Recieved match frames data", event.data)
+        console.log("Recieved match frames data",typeof event.data)
         const data = JSON.parse(event.data);
 
         if (!data) {
@@ -289,7 +291,6 @@ ${sequentialEvents}.
             console.log("homeTeamGoals",homeTeamGoals, "awayTeamGoals", awayTeamGoals)
             console.log(digest, imageUrl, homeTeamGoals, awayTeamGoals, goals, cards)
             try {
-                console.log("res.headersSent 3", res.headersSent)
                 res.json({ 
                     digest: digest, 
                     imageUrl: imageUrl,
@@ -300,6 +301,7 @@ ${sequentialEvents}.
                     awayTeamGoals: awayTeamGoals, 
                     awayTeamName: clubIdNameMap[awayTeamId]
                 });
+                console.log("res.headersSent 3", res.headersSent)
             } catch (error) {
                 console.error('Error sending response:', error);
             }
