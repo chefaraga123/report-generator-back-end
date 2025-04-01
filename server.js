@@ -142,16 +142,13 @@ app.get('/api/sse', async (req, res) => {
     // Create a Promise to handle the EventSource logic for partial data
     const processPartialData = new Promise((resolve, reject) => {
         eventSourcePartial.onmessage = async (event) => {
-            console.log("Received partial data:", typeof event.data);
+            //console.log("Received partial data:", typeof event.data);
             const data = JSON.parse(event.data);
 
             if (!data) {
                 return;
             }
 
-            // Close the EventSource connection once received data
-            eventSourcePartial.close();
-            resolve();
 
             
             let playerIds = [];
@@ -168,6 +165,7 @@ app.get('/api/sse', async (req, res) => {
                 playerIdNameMap[playerId] = playerData.players[0].fullName;
             }
 
+
             homeTeamWins = data.state.homeTeam.stats.wins;
             awayTeamWins = data.state.awayTeam.stats.wins;
             homeTeamId = data.state.homeTeam.clubId;
@@ -178,6 +176,8 @@ app.get('/api/sse', async (req, res) => {
             const awayTeamName = await getClubData(awayTeamId);
             clubIdNameMap[homeTeamId] = homeTeamName;
             clubIdNameMap[awayTeamId] = awayTeamName;
+            console.log("clubIdNameMap", clubIdNameMap)
+            console.log("playerIdNameMap", playerIdNameMap)
 
             for (const event of data.state.keyEvents) {
                 let playerId = '';
@@ -203,8 +203,11 @@ app.get('/api/sse', async (req, res) => {
                     });
                 }
             }
+            // Close the EventSource connection once received data
+            eventSourcePartial.close();
+            resolve();
         };
-
+        
         eventSourcePartial.onerror = (error) => {
             console.error('EventSource failed:', error);
             eventSourcePartial.close();
@@ -224,22 +227,28 @@ app.get('/api/sse', async (req, res) => {
     eventSourceFrames.onmessage = async (event) => {
         console.log("Recieved match frames data",typeof event.data)
         const data = JSON.parse(event.data);
-
         if (!data) {
+            console.log("data", data)
             return;
         }
         
         const sequentialEvents = data.map(event => {
-            return `
-                Type: ${event.eventTypeAsString}, 
-                Team: ${clubIdNameMap[event.teamInPossession]}, 
-                Player: ${playerIdNameMap[event.playerInPossession]}`;
+            console.log("event", event)
+            const object = {
+                "Type": event.eventTypeAsString, 
+                "Team": clubIdNameMap[event.teamInPossession], 
+                "Player": playerIdNameMap[event.playerInPossession]
+            }
+            console.log("object", object)
+            return object
         }).join('\n');
 
         if (sequentialEvents) {
             // Calculate total goals for each team
             const homeTeamGoals = goals.filter(goal => goal.team === clubIdNameMap[homeTeamId]).length;
+            console.log("FILTER: homeTeamGoals", homeTeamGoals)
             const awayTeamGoals = goals.filter(goal => goal.team === clubIdNameMap[awayTeamId]).length;
+            console.log("FILTER: awayTeamGoals", awayTeamGoals)
 
             // Include the overall score in the message
             const message = `   
@@ -260,7 +269,7 @@ Don't make any reference to the particular timestamp of the events, just describ
 ${sequentialEvents}. 
                   ` 
             try {
-                console.log("message", message)
+                
               const completion = await openai.chat.completions.create({
                   model: "gpt-4o-mini",
                   messages: [
@@ -272,7 +281,7 @@ ${sequentialEvents}.
               console.log("completion", completion)
               digest = completion.choices[0].message.content
 
-              const imageResponse = await openai.images.generate({
+              /*const imageResponse = await openai.images.generate({
                 model: "dall-e-3",
                 prompt: `A scene from this match: ${digest}`,
                 n: 1,
@@ -280,7 +289,8 @@ ${sequentialEvents}.
                 quality: "standard",
                });
             
-            imageUrl = imageResponse.data[0].url;
+            imageUrl = imageResponse.data[0].url;*/
+            imageUrl=''
         
             eventSourceFrames.close();
 
@@ -291,8 +301,9 @@ ${sequentialEvents}.
                 console.log("res.headersSent 2", res.headersSent)
             }
             
-            console.log("homeTeamGoals",homeTeamGoals, "awayTeamGoals", awayTeamGoals)
-            console.log(digest, imageUrl, homeTeamGoals, awayTeamGoals, goals, cards)
+            //console.log("Digest: \n\n", digest, "\n\nImage URL: \n\n", imageUrl, "\n\nHome Team Goals: \n\n", homeTeamGoals, "\n\nAway Team Goals: \n\n", awayTeamGoals, "\n\nGoals: \n\n", goals, "\n\nCards: \n\n", cards)
+
+            // Send the response to the frontend
             try {
                 res.json({ 
                     digest: digest, 
